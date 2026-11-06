@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全日本AIハッカソン</title>
+<style>
+  :root {
+    --bg: #fbfbfa;
+    --fg: #1a1a18;
+    --muted: #6b6b66;
+    --line: #e4e4e0;
+    --card: #ffffff;
+    --accent: #d2691e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a;
+      --fg: #eeeeec;
+      --muted: #9a9a94;
+      --line: #2c2c32;
+      --card: #1e1e24;
+      --accent: #f0914a;
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  main {
+    width: 100%;
+    max-width: 560px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 40px 32px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    letter-spacing: .04em;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 12px;
+    margin-bottom: 22px;
+  }
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  h1 {
+    margin: 0 0 10px;
+    font-size: clamp(24px, 5vw, 32px);
+    letter-spacing: -.02em;
+  }
+
+  p {
+    margin: 0 0 24px;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  #app {
+    border: 1px dashed var(--line);
+    border-radius: 10px;
+    padding: 28px 20px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  footer {
+    margin-top: 26px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .92em;
+  }
+</style>
+</head>
+<body>
+  <main>
+    <div class="badge"><span class="dot"></span>Cloudflare Workers</div>
+
+    <h1>全日本AIハッカソン</h1>
+    <p>デプロイのための骨組み。ここから中身を作っていく。</p>
+
+    <div id="app">
+      ここにアプリを実装する
+    </div>
+
+    <footer>
+      <span>static assets &middot; <code>public/</code></span>
+      <span id="built"></span>
+    </footer>
+  </main>
+
+</body>
+</html>

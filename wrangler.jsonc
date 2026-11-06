@@ -1,0 +1,22 @@
+{
+  // スキーマは CDN 参照(ローカルに wrangler を入れない運用のため)
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+
+  "name": "all-japan-ai-hackathon",
+  "compatibility_date": "2026-11-07",
+
+  // 静的アセットのみの構成。public/ 配下がそのまま配信される。
+  // 静的アセットへのリクエストは無料・無制限(Worker は起動しない)。
+  "assets": {
+    "directory": "./public",
+
+    // 存在しないパスで index.html を返す(SPA向け)。
+    // 複数ページの静的サイトにするなら "404-page" に変更する。
+    "not_found_handling": "single-page-application"
+  }
+
+  // --- あとで API(OpenAI 呼び出し)を足すときはここを有効化 ---
+  // "main": "src/index.ts",
+  // "assets": { "directory": "./public", "binding": "ASSETS" },
+  // 本番シークレット: npx wrangler secret put OPENAI_API_KEY
+}

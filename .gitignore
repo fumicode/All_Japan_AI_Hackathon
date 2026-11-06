@@ -1,0 +1,22 @@
+# dependencies
+node_modules/
+
+# secrets
+# 公式: 「Add `.dev.vars*` and `.env*` to your project's .gitignore file.」
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
+
+# wrangler
+.wrangler/
+
+# build output
+dist/
+build/
+.next/
+.open-next/
+
+# misc
+.DS_Store
+*.log

@@ -1,0 +1,10 @@
+{
+  "name": "all-japan-ai-hackathon",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx wrangler dev",
+    "deploy": "npx wrangler deploy",
+    "check": "npx wrangler deploy --dry-run"
+  }
+}
