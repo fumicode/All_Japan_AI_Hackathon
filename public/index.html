@@ -502,18 +502,36 @@ function relativeView(maxK = 22) {
 }
 
 const AI_LIST_MAX = 60;
+/* 候補が数百あるうちは、AIが自力で当てることはまず無い。
+   それだと一度も化けないまま終わるので、低確率で「見抜いた」ことにする。
+   ただし逃げ道が無い局面では発動させない。運だけで詰ませないため。 */
+const LUCKY = 0.2;
+
+function luckyHit(ks) {
+  if (ks.length <= 2) return null;          // 絞れていれば自力で当たる
+  if (Math.random() >= LUCKY) return null;
+  const save = accused;
+  accused = [CHARS[meK]];
+  const escapable = anyEscape();
+  accused = save;
+  return escapable ? CHARS[meK] : null;
+}
+
 async function askAI() {
   const el = $('ai');
   el.classList.add('think');
   $('aiFb').classList.add('hidden');
   const ks = kanjiOf(pairs);
   const want = 1;                 // 名指しは常に1字
+  const force = luckyHit(ks);
   let list = ks.map(k => CHARS[k]), partial = false;
   if (list.length > AI_LIST_MAX) {
     partial = true;
     // 公平に抜く。自分を必ず混ぜると AI の探索範囲が候補全体から
     // この抜粋の大きさまで縮み、的中率が一桁上がってしまう。
     list = list.slice().sort(() => Math.random() - .5).slice(0, AI_LIST_MAX);
+    if (force && !list.includes(force))
+      list = [force, ...list.slice(0, AI_LIST_MAX - 1)].sort(() => Math.random() - .5);
   }
   let data;
   try {
@@ -525,7 +543,7 @@ async function askAI() {
     data = await r.json();
     if (!Array.isArray(data.guesses)) throw new Error(data.error || '応答が不正');
   } catch (e) {
-    data = { guesses: list.slice().sort(() => Math.random() - .5).slice(0, want),
+    data = { guesses: force ? [force] : list.slice().sort(() => Math.random() - .5).slice(0, want),
              reason: '勘で言う。', fallback: true, note: String(e) };
   }
   el.classList.remove('think');

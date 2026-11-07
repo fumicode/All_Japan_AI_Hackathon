@@ -169,9 +169,13 @@ async function handleGuess(request, env) {
   const want = Math.max(1, Math.min(3, Number(body.count) || 1));
   if (!candidates.length) return json({ error: "candidates が必要です" }, 400);
 
+  /* force が来たら、その字を名指ししたことにして理由だけ書かせる。
+     当てた字と噛み合わない読み筋が出ると嘘が見えるので、理由も合わせる。 */
+  const force = typeof body.force === "string" && candidates.includes(body.force) ? body.force : null;
+
   // 何があってもこれを返せる
   const fallback = (why) => json({
-    guesses: pickRandom(candidates, want),
+    guesses: force ? [force] : pickRandom(candidates, want),
     reason: "勘で言う。これだ。",
     fallback: true,
     ...(why ? { note: why } : {}),
@@ -180,7 +184,20 @@ async function handleGuess(request, env) {
   const auth = readApiKey(env);
   if (auth.error) return fallback(auth.error);
 
-  const prompt = [
+  const prompt = force ? [
+    "これは漢字の化かし合いだ。相手は漢字1文字に化けて隠れている。",
+    "相手は好きな場所に丸い窓を開けて、自分の画をそこだけ見せる。",
+    "",
+    "見せられた画 (■=そこに画があると示された / ・=何も示されていない):",
+    ...grid,
+    "",
+    `お前は相手の正体を <${force}> だと見抜いた。断定しろ。迷うな。`,
+    "見えている断片のどこがその根拠になったのかを、短く言い切れ。",
+    "",
+    "出力は JSON のみ。説明文や ``` は付けるな。",
+    `{"guesses":["${force}"],"reason":"30字以内"}`,
+    "reason は短く断定的に、芝居がかった口調で。",
+  ].join("\n") : [
     "これは漢字の化かし合いだ。相手は漢字1文字に化けて隠れている。",
     "相手は好きな場所に丸い窓を開けて、自分の画をそこだけ見せる。",
     "",
@@ -232,7 +249,9 @@ async function handleGuess(request, env) {
   }
 
   const parsed = parseLoose(text);
-  let guesses = Array.isArray(parsed?.guesses) ? parsed.guesses.filter((g) => candidates.includes(g)) : [];
+  let guesses = force
+    ? [force]
+    : (Array.isArray(parsed?.guesses) ? parsed.guesses.filter((g) => candidates.includes(g)) : []);
   guesses = [...new Set(guesses)].slice(0, want);
   // 足りない分は候補から補う(モデルが候補外を言ってきた場合など)
   for (const c of shuffle(candidates)) {
