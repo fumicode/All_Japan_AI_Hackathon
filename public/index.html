@@ -112,7 +112,8 @@
 
 <div class="row">
   <button class="act hidden" id="again">もう一度</button>
-  <button class="act ghost" id="reroll">別の字で始める</button>
+  <button class="act ghost" id="choose">字を選んで始める</button>
+  <button class="act ghost" id="reroll">くじ引きで始める</button>
 </div>
 
 <details class="rules">
@@ -148,6 +149,7 @@ let CHARS = [], INK = [], INKD = [];
    欲しいのは「その辺りに画が通っているか」なので D 升ぶん膨らませる。 */
 const DILATE = 2;
 let meK = 0;                    // 自分は常にずれ 0。描画位置は動かない
+let choices = [];               // 最初の字を選ぶときの候補
 let pairs = null;               // [[k,ox,oy], ...] 自分から見た相対的なずれ
 let kCount = null;
 let shown = new Uint8Array(VS * VS), wins = [],
@@ -319,7 +321,8 @@ function validSpots() {
 }
 
 function render() {
-  const all = CHARS.length ? glyphRects(meK) : '';
+  const choosing = mode === 'choose';
+  const all = (CHARS.length && !choosing) ? glyphRects(meK) : '';
   const clip = wins.map(w => `<circle cx="${w[0]}" cy="${w[1]}" r="${WIN_R}"/>`).join('');
   const rings = wins.map((w, i) => `<circle cx="${w[0]}" cy="${w[1]}" r="${WIN_R}" fill="none"
       stroke="${i === wins.length - 1 ? 'var(--accent)' : '#4a4433'}" stroke-width=".3" opacity=".8"/>`).join('');
@@ -334,11 +337,19 @@ function render() {
   boardEl.classList.toggle('clickable', mode === 'reveal' || mode === 'escape');
   boardEl.classList.toggle('esc', mode === 'escape');
 
-  $('meCh').textContent = CHARS[meK] || '—';
+  $('meCh').textContent = choosing ? '—' : (CHARS[meK] || '—');
   $('score').textContent = total();
   $('scoreSub').textContent = `${turns}手 / 化け${score}`;
   const picking = mode === 'escape';
-  $('cands').classList.toggle('picking', picking);
+  $('cands').classList.toggle('picking', picking || choosing);
+  if (choosing) {
+    $('candN').textContent = choices.length;
+    $('candLab').textContent = '最初の字を選べ';
+    $('chips').innerHTML = choices
+      .map(k => `<span class="chip pick" data-k="${k}">${CHARS[k]}</span>`).join('');
+    $('path').innerHTML = '<span style="color:#8b8a94">化けた跡　—</span>';
+    return;
+  }
   const ks = pairs ? kanjiOf(pairs) : null;
   const pickable = ks ? ks.filter(k => k !== meK && !accused.includes(CHARS[k])).length : 0;
   $('candN').textContent = ks ? (picking ? pickable : ks.length) : '—';
@@ -386,9 +397,10 @@ boardEl.addEventListener('click', (ev) => {
 });
 
 $('chips').addEventListener('click', (ev) => {
-  if (mode !== 'escape') return;
   const el = ev.target.closest('.chip.pick, .chip.target');
   if (!el || !el.dataset.k) return;
+  if (mode === 'choose') return start(+el.dataset.k);
+  if (mode !== 'escape') return;
   const k = +el.dataset.k;
   target = (target === k) ? null : k;
   render();
@@ -575,8 +587,25 @@ async function askAI() {
 }
 
 /* ── 開始 ─────────────────────────────── */
-function start() {
-  meK = Math.floor(Math.random() * CHARS.length);
+/* 最初の字を選ばせる。テーマの字なので 化 は必ず混ぜる。 */
+const CHOICES = 30;
+function startChoosing() {
+  const theme = CHARS.indexOf('化');
+  const rest = CHARS.split('').map((_, i) => i).filter(i => i !== theme)
+    .sort(() => Math.random() - .5).slice(0, CHOICES - (theme >= 0 ? 1 : 0));
+  choices = (theme >= 0 ? [theme, ...rest] : rest).sort(() => Math.random() - .5);
+  pairs = null; kCount = null; shown = new Uint8Array(VS * VS); wins = [];
+  score = 0; turns = 0; path = []; accused = []; target = null;
+  $('again').classList.add('hidden');
+  $('aiGuess').textContent = '—';
+  $('aiReason').textContent = 'まだ何も見ていない。';
+  $('aiFb').classList.add('hidden');
+  mode = 'choose'; render();
+  say('どの字になるか選べ。<span style="color:#8b8a94">（選ばずに始めると、くじ引きになる）</span>');
+}
+
+function start(k) {
+  meK = (typeof k === 'number' && k >= 0) ? k : Math.floor(Math.random() * CHARS.length);
   pairs = null; kCount = null; shown = new Uint8Array(VS * VS); wins = [];
   score = 0; turns = 0; path = [CHARS[meK]]; accused = []; target = null;
   $('again').classList.add('hidden');
@@ -587,8 +616,9 @@ function start() {
   say(`あなたは <b>${CHARS[meK]}</b>。薄く見えているのが自分の姿だ。<br>つついて窓を開け、画の一部を見せろ。`);
 }
 
-$('again').addEventListener('click', start);
-$('reroll').addEventListener('click', start);
+$('again').addEventListener('click', () => start());
+$('reroll').addEventListener('click', () => start());
+$('choose').addEventListener('click', startChoosing);
 
 fetch('kanji64.json').then(r => r.json()).then(d => {
   CHARS = d.chars;
