@@ -20,6 +20,7 @@ export default {
     const { pathname } = new URL(request.url);
 
     if (pathname === "/api/chat") return handleChat(request, env);
+    if (pathname === "/api/guess") return handleGuess(request, env);
 
     if (pathname.startsWith("/api/")) {
       return json({ error: "Not found", path: pathname }, 404);
@@ -140,6 +141,149 @@ async function handleChat(request, env) {
       ...corsHeaders(),
     },
   });
+}
+
+
+/* ──────────────────────────────────────────────────────────
+ * /api/guess — 「化かし合い」の AI 側
+ *
+ * 設計上の約束: ここは絶対に落ちない。
+ *   OpenAI が死んでも、鍵が無くても、JSON が壊れても、
+ *   必ず候補の中から 1つ以上を返す。ゲームが止まる方が事故。
+ * ────────────────────────────────────────────────────────── */
+async function handleGuess(request, env) {
+  if (request.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: corsHeaders() });
+  }
+  if (request.method !== "POST") return json({ error: "POST のみ対応しています" }, 405);
+
+  let body = {};
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: "リクエストボディが JSON として解釈できません" }, 400);
+  }
+
+  const candidates = Array.isArray(body.candidates) ? body.candidates.filter((c) => typeof c === "string") : [];
+  const grid = Array.isArray(body.grid) ? body.grid.map(String) : [];
+  const want = Math.max(1, Math.min(3, Number(body.count) || 1));
+  if (!candidates.length) return json({ error: "candidates が必要です" }, 400);
+
+  // 何があってもこれを返せる
+  const fallback = (why) => json({
+    guesses: pickRandom(candidates, want),
+    reason: "勘で言う。これだ。",
+    fallback: true,
+    ...(why ? { note: why } : {}),
+  });
+
+  const auth = readApiKey(env);
+  if (auth.error) return fallback(auth.error);
+
+  const prompt = [
+    "これは漢字の化かし合いだ。相手は漢字1文字に化けて隠れている。",
+    "相手は好きな場所に丸い窓を開けて、自分の画をそこだけ見せる。",
+    "",
+    "見せられた画 (■=そこに画があると示された / ・=何も示されていない):",
+    ...grid,
+    "",
+    "・ は「画が無い」ではない。ただ見せられていないだけで、そこに画がある可能性は残る。",
+    "この図は見せられた画を囲む範囲だけを切り出したものだ。",
+    "字全体のどのあたりかは分からない。上下左右の端がどこかも分からない。",
+    "断片どうしの位置関係と形だけが手がかりだ。",
+    "",
+    `開けられた窓の数: ${Number(body.revealed) || 0}`,
+    body.partial
+      ? `まだあり得る漢字は全部で ${Number(body.totalCandidates) || candidates.length} 字ある。そのうち ${candidates.length} 字を抜き出したものがこれだ:\n${candidates.join(" ")}\n相手は必ずこの中にいる。`
+      : `まだあり得る漢字 (${candidates.length}字): ${candidates.join(" ")}`,
+    "",
+    "相手は「正体が割れにくい場所」を選んで開けている。",
+    "見えている形と、断片どうしの並びから読め。相手の選び方の癖を疑え。",
+    "",
+    "出力は JSON のみ。説明文や ``` は付けるな。",
+    `{"guesses":[${Array(want).fill('"漢字"').join(",")}],"reason":"30字以内"}`,
+    `guesses は上の候補から必ず ${want} 個、重複なし。reason は短く断定的に、芝居がかった口調で。`,
+  ].join("\n");
+
+  let res;
+  try {
+    res = await fetch(OPENAI_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${auth.key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: body.model ?? DEFAULT_MODEL,
+        input: prompt,
+        reasoning: { effort: body.effort ?? "none" },
+      }),
+    });
+  } catch (e) {
+    return fallback(`fetch 失敗: ${String(e)}`);
+  }
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    return fallback(`OpenAI ${res.status}: ${detail.slice(0, 300)}`);
+  }
+
+  let text = "";
+  try {
+    text = extractText(await res.json());
+  } catch (e) {
+    return fallback(`レスポンス解析失敗: ${String(e)}`);
+  }
+
+  const parsed = parseLoose(text);
+  let guesses = Array.isArray(parsed?.guesses) ? parsed.guesses.filter((g) => candidates.includes(g)) : [];
+  guesses = [...new Set(guesses)].slice(0, want);
+  // 足りない分は候補から補う(モデルが候補外を言ってきた場合など)
+  for (const c of shuffle(candidates)) {
+    if (guesses.length >= want) break;
+    if (!guesses.includes(c)) guesses.push(c);
+  }
+  if (!guesses.length) return fallback("候補に合致する guesses が無い");
+
+  const reason = typeof parsed?.reason === "string" && parsed.reason.trim()
+    ? parsed.reason.trim().slice(0, 60)
+    : "読めた。";
+
+  return json({ guesses, reason, raw: text.slice(0, 200) });
+}
+
+/** Responses API のレスポンスから本文を拾う(形が変わっても耐える) */
+function extractText(data) {
+  if (typeof data?.output_text === "string" && data.output_text) return data.output_text;
+  const chunks = [];
+  const walk = (node) => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) return node.forEach(walk);
+    if (typeof node.text === "string" && (node.type === "output_text" || node.type === "text")) {
+      chunks.push(node.text);
+    }
+    Object.values(node).forEach(walk);
+  };
+  walk(data?.output ?? data);
+  return chunks.join("");
+}
+
+/** ```json で囲まれていても最初の { から最後の } を拾って読む */
+function parseLoose(text) {
+  if (!text) return null;
+  try { return JSON.parse(text); } catch {}
+  const a = text.indexOf("{"), b = text.lastIndexOf("}");
+  if (a < 0 || b <= a) return null;
+  try { return JSON.parse(text.slice(a, b + 1)); } catch { return null; }
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function pickRandom(arr, n) {
+  return shuffle(arr).slice(0, Math.min(n, arr.length));
 }
 
 function corsHeaders() {

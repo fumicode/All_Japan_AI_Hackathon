@@ -1,212 +1,517 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>全日本AIハッカソン</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>化かし合い</title>
 <style>
-  :root {
-    --bg: #f4efe6;
-    --fg: #1a1a18;
-    --muted: #6b6b66;
-    --line: #e0dacf;
-    --card: #fffdf9;
-    --accent: #d2691e;
+  :root{
+    --bg:#0d0d11; --panel:#15151b; --board:#07070a; --ink:#f4f1ea;
+    --accent:#e8b545; --danger:#e8554f; --text:#e8e6e1; --dim:#8b8a94; --line:#2a2a34;
+    --font: ui-sans-serif,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #14120f;
-      --fg: #eeeeec;
-      --muted: #9a9a94;
-      --line: #2e2a24;
-      --card: #1d1a16;
-      --accent: #f0914a;
-    }
-  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:var(--font)}
+  body{min-height:100vh;display:flex;flex-direction:column;align-items:center;
+       padding:12px 14px 30px;gap:10px;-webkit-text-size-adjust:100%}
 
-  * { box-sizing: border-box; }
+  header{width:100%;max-width:980px;display:flex;align-items:baseline;gap:14px}
+  h1{margin:0;font-size:19px;letter-spacing:.22em;font-weight:600}
+  h1 em{font-style:normal;color:var(--accent)}
+  .meNow{display:flex;align-items:baseline;gap:8px;margin-left:auto}
+  .meNow .lab{font-size:10px;color:var(--dim);letter-spacing:.14em}
+  .meNow .ch{font-size:28px;line-height:1;font-weight:700;color:var(--ink)}
+  .score{font-size:11px;color:var(--dim);text-align:right;line-height:1.4;white-space:nowrap}
+  .score b{color:var(--accent);font-size:25px;font-weight:700;margin:0 2px}
 
-  body {
-    margin: 0;
-    min-height: 100dvh;
-    display: grid;
-    place-items: center;
-    padding: 24px;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
-    line-height: 1.7;
-    -webkit-font-smoothing: antialiased;
-  }
+  .wrap{width:100%;max-width:980px;display:flex;flex-wrap:wrap;gap:16px;
+        align-items:flex-start;justify-content:center}
+  .col-r{flex:1 1 300px;min-width:270px;max-width:540px;display:flex;flex-direction:column;gap:10px}
+  @media (max-width:739px){ .col-r{flex:1 1 100%} }
 
-  main {
-    width: 100%;
-    max-width: 600px;
-    background: var(--card);
-    border: 1px solid var(--line);
-    border-radius: 14px;
-    padding: 36px 30px;
-  }
+  /* border はレイアウト箱を広げて SVG の座標系とクリック座標をずらすので使わない */
+  #board{width:min(74vw,330px);aspect-ratio:1;background:var(--board);
+         border-radius:12px;outline:1px solid var(--line);outline-offset:-1px;
+         display:block;touch-action:manipulation}
+  #board.clickable{cursor:crosshair}
+  #board.esc{outline-color:var(--accent)}
 
-  .badge {
-    display: inline-flex; align-items: center; gap: 7px;
-    font-size: 12px; letter-spacing: .04em; color: var(--muted);
-    border: 1px solid var(--line); border-radius: 999px;
-    padding: 5px 12px; margin-bottom: 20px;
-  }
-  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .legend{display:flex;gap:14px;justify-content:center;margin-top:7px;font-size:11px;color:var(--dim)}
+  .legend i.sw{display:inline-block;width:9px;height:9px;border-radius:2px;
+               background:var(--ink);margin-right:5px;vertical-align:-1px}
+  .legend i.dim{opacity:.24}
+  .say{width:100%;font-size:14px;line-height:1.6;min-height:44px;
+       padding:11px 13px;border-radius:11px;border:1px solid var(--line);background:#121218}
+  .say.hit{border-color:var(--accent);background:#211a0c}
+  .say.over{border-color:var(--danger);background:#231210}
+  .say.bad{border-color:#55525c;background:#1a1a20;color:var(--dim)}
+  .say b{color:var(--accent)}
 
-  h1 { margin: 0 0 8px; font-size: clamp(23px, 5vw, 30px); letter-spacing: -.02em; }
-  .lead { margin: 0 0 26px; color: var(--muted); font-size: 15px; }
+  .ai{width:100%;background:var(--panel);border:1px solid var(--line);
+      border-radius:11px;padding:11px 13px;min-height:74px}
+  .ai .lab{font-size:10px;color:var(--dim);letter-spacing:.14em;margin-bottom:7px}
+  .ai .guess{font-size:28px;font-weight:700;letter-spacing:.1em;color:var(--danger)}
+  .ai .reason{font-size:13.5px;margin-top:5px;line-height:1.6}
+  .ai.think .lab::after{content:" ‥考えている";color:var(--accent)}
+  .ai .fb{font-size:10px;color:var(--dim);margin-top:5px}
 
-  /* ── ここから下は動作確認用。中身を作るときに丸ごと差し替えてよい ── */
-  .probe {
-    border: 1px dashed var(--line); border-radius: 10px;
-    padding: 18px; background: color-mix(in srgb, var(--bg) 45%, transparent);
-  }
-  .probe-label {
-    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
-    color: var(--muted); margin-bottom: 12px;
-  }
-  .row { display: flex; gap: 8px; }
-  input[type=text] {
-    flex: 1; min-width: 0;
-    padding: 10px 12px; font: inherit; font-size: 14px;
-    color: var(--fg); background: var(--card);
-    border: 1px solid var(--line); border-radius: 8px;
-  }
-  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-  button {
-    padding: 10px 18px; font: inherit; font-size: 14px; font-weight: 600;
-    color: #fff; background: var(--accent);
-    border: none; border-radius: 8px; cursor: pointer;
-    white-space: nowrap;
-  }
-  button:disabled { opacity: .45; cursor: default; }
+  .cands{border:1px solid var(--line);border-radius:11px;padding:10px 11px;background:#101016}
+  .cands.picking{border-color:var(--accent);background:#1b1509}
+  .cands .lab{font-size:10px;color:var(--dim);letter-spacing:.14em;margin-bottom:6px}
+  .cands .lab b{color:var(--accent);font-size:16px}
+  .chips{display:flex;flex-wrap:wrap;gap:4px;max-height:148px;overflow:auto}
+  .chip{font-size:17px;line-height:1;padding:5px 6px;border-radius:6px;
+        background:var(--panel);border:1px solid var(--line);color:var(--text)}
+  .chip.mine{border-color:var(--accent);color:var(--accent)}
+  .chip.accused{background:#3a1512;border-color:var(--danger);color:#ff9b96}
+  .chip.pick{cursor:pointer}
+  .chip.pick:hover{background:#2e2e3a;border-color:#6e6e88}
+  .chip.target{background:var(--accent);color:#1a1205;border-color:var(--accent);font-weight:700}
+  .chip.off{opacity:.3}
 
-  #out {
-    margin-top: 14px; min-height: 2.6em;
-    font-size: 14px; white-space: pre-wrap; word-break: break-word;
-  }
-  #out:empty::before { content: "応答がここに流れます"; color: var(--muted); }
-  #status { margin-top: 10px; font-size: 12px; color: var(--muted); }
-  #status.err { color: #d14343; }
-  @media (prefers-color-scheme: dark) { #status.err { color: #ff8a8a; } }
-
-  footer {
-    margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line);
-    font-size: 12px; color: var(--muted);
-    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
+  button.act{font:inherit;font-size:14px;padding:11px 20px;border-radius:999px;border:0;
+             background:var(--accent);color:#1a1205;font-weight:700;cursor:pointer;letter-spacing:.06em}
+  button.act.ghost{background:transparent;color:var(--dim);border:1px solid var(--line);font-weight:500}
+  .row{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
+  .rules{max-width:620px;font-size:12px;color:var(--dim);line-height:1.8}
+  .rules summary{cursor:pointer;letter-spacing:.1em}
+  .hidden{display:none!important}
 </style>
 </head>
 <body>
-  <main>
-    <div class="badge"><span class="dot"></span>Cloudflare Workers</div>
 
-    <h1>全日本AIハッカソン</h1>
-    <p class="lead">デプロイのための骨組み。ここから中身を作っていく。</p>
+<header>
+  <h1>化<em>かし合い</em></h1>
+  <div class="meNow"><span class="lab">いまのあなた</span><span class="ch" id="meCh">—</span></div>
+  <div class="score"><b id="score">0</b> 点<br><span id="scoreSub">0手 / 化け0</span></div>
+</header>
 
-    <div class="probe">
-      <div class="probe-label">動作確認 · /api/chat</div>
-      <div class="row">
-        <input type="text" id="q" value="自己紹介を一文で。" autocomplete="off">
-        <button id="send">送信</button>
-      </div>
-      <div id="out"></div>
-      <div id="status"></div>
+<div class="wrap">
+  <div>
+    <svg id="board" viewBox="-24 -24 112 112" shape-rendering="crispEdges"></svg>
+    <div class="legend">
+      <span><i class="sw dim"></i>あなただけに見えている</span>
+      <span><i class="sw lit"></i>AIに見えている</span>
     </div>
+  </div>
+  <div class="col-r">
+    <div class="say" id="say">読み込み中…</div>
+    <div class="cands" id="cands">
+      <div class="lab"><span id="candLab">まだ化けられる漢字</span> <b id="candN">—</b></div>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="ai" id="ai">
+      <div class="lab">AI</div>
+      <div class="guess" id="aiGuess">—</div>
+      <div class="reason" id="aiReason">まだ何も見ていない。</div>
+      <div class="fb hidden" id="aiFb"></div>
+    </div>
+    <div class="say" id="path" style="min-height:0;font-size:13px">—</div>
+  </div>
+</div>
 
-    <footer>
-      <span>static assets &middot; <code>public/</code></span>
-      <span id="built"></span>
-    </footer>
-  </main>
+<div class="row">
+  <button class="act hidden" id="again">もう一度</button>
+  <button class="act ghost" id="reroll">別の字で始める</button>
+</div>
+
+<details class="rules">
+  <summary>ルール</summary>
+  <p>
+  あなたは漢字1文字に化けている。手番ごとに盤を1か所つついて、<b>丸い窓を開けて自分の画を見せる</b>。
+  窓は必ず<b>自分の画を含み</b>、かつ<b>候補を1つ以上減らす</b>場所でなければならない（足踏み禁止）。<br><br>
+  AIは開いた窓から正体を読み、<b>1字を名指しする</b>。
+  当てられたら<b>別の漢字に化けて逃げられる</b>——先に化け先を選び、
+  <b>その字の画が写る窓</b>を開けて、いまの自分ではないことを示してからだ。
+  名指しされた字そのものには化けられない。<br><br>
+  <b>1手逃げるごとに1点、1回化けるごとに10点。</b>逃げ道が尽きたら捕まる。
+  </p>
+</details>
 
 <script>
-  document.getElementById('built').textContent =
-    new Date().toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' });
+/* 座標系は「字」を原点に固定する。
+   字は常に 0..G の同じ場所に描かれ、動かない。
+   化けた先が「ずれて一致する字」のときは、動くのは窓のほうになる。
+   断片どうしの相対位置は変わらないので、AI から見える情報は同じ。 */
+const G = 64, GCELLS = G * G;   // 字そのものの分割数
+const OFF = 10;                 // 化け先が許されるずれ幅(升)
+const V0 = -24, VS = 112;       // 盤(描画と記録)の範囲: V0 .. V0+VS
+const WIN_R = 0.065 * G;        // 窓の半径。直径が字の13% / 52升
+const MIN_DIST = 1.5 * WIN_R;   // 窓どうしの最低距離。重ねて足踏みするのを防ぐ
+const GAP = 0.08;
+const $ = (id) => document.getElementById(id);
 
-  const q = document.getElementById('q');
-  const send = document.getElementById('send');
-  const out = document.getElementById('out');
-  const status = document.getElementById('status');
+let CHARS = [], INK = [];
+let meK = 0;                    // 自分は常にずれ 0。描画位置は動かない
+let pairs = null;               // [[k,ox,oy], ...] 自分から見た相対的なずれ
+let kCount = null;
+let shown = new Uint8Array(VS * VS), wins = [],
+    score = 0, turns = 0, path = [], mode = 'boot', accused = [], target = null;
 
-  async function ask() {
-    const text = q.value.trim();
-    if (!text) return;
+const ESCAPE_BONUS = 10;
+const total = () => turns + score * ESCAPE_BONUS;
+const boardEl = $('board');
 
-    send.disabled = true;
-    out.textContent = '';
-    status.className = '';
-    status.textContent = '接続中…';
-    const t0 = performance.now();
+const idx = (x, y) => (y - V0) * VS + (x - V0);
+const inView = (x, y) => x >= V0 && y >= V0 && x < V0 + VS && y < V0 + VS;
+function inkAt(k, ox, oy, x, y) {
+  const gx = x - ox, gy = y - oy;
+  if (gx < 0 || gy < 0 || gx >= G || gy >= G) return 0;
+  return INK[k][gy * G + gx];
+}
+const myInk = (x, y) => inkAt(meK, 0, 0, x, y);
+/* 見せたのは画だけ。窓の中の黒い部分は「画が無い」ではなく「まだ見せていない」。
+   なので候補の条件は「見せた画の位置すべてに画があること」だけ。
+   余白を証拠に使わない分、候補は大きく残る。 */
+function pairOk(k, ox, oy, cells) {
+  for (const [x, y] of cells)
+    if (myInk(x, y) === 1 && inkAt(k, ox, oy, x, y) !== 1) return false;
+  return true;
+}
+const kanjiOf = (ps) => [...new Set(ps.map(p => p[0]))];
 
-    try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ input: text }),
-      });
+function allPairs(cells) {
+  const out = [];
+  for (let k = 0; k < CHARS.length; k++)
+    for (let oy = -OFF; oy <= OFF; oy++)
+      for (let ox = -OFF; ox <= OFF; ox++)
+        if (pairOk(k, ox, oy, cells)) out.push([k, ox, oy]);
+  return out;
+}
+const survivors = (cells) => pairs ? pairs.filter(p => pairOk(p[0], p[1], p[2], cells)) : null;
 
-      // エラーは JSON で返る設計
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        status.className = 'err';
-        status.textContent = `${res.status} — ${err.error}${err.hint ? ' / ' + err.hint : ''}`;
-        if (err.detail) out.textContent = err.detail;
-        return;
-      }
-
-      // SSE を読む。data: 行の JSON を見て type で分岐する
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = '', first = true;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buf += decoder.decode(value, { stream: true });
-
-        const blocks = buf.split('\n\n');
-        buf = blocks.pop() ?? '';
-
-        for (const block of blocks) {
-          for (const line of block.split('\n')) {
-            if (!line.startsWith('data:')) continue;
-            const payload = line.slice(5).trim();
-            if (!payload || payload === '[DONE]') continue;
-
-            let ev;
-            try { ev = JSON.parse(payload); } catch { continue; }
-
-            if (ev.type === 'response.output_text.delta' && ev.delta) {
-              if (first) { status.textContent = `初回応答 ${Math.round(performance.now() - t0)}ms`; first = false; }
-              out.textContent += ev.delta;
-            } else if (ev.type === 'response.completed') {
-              status.textContent = `完了 ${Math.round(performance.now() - t0)}ms`;
-            } else if (ev.type === 'error' || ev.error) {
-              status.className = 'err';
-              status.textContent = ev.message || JSON.stringify(ev.error);
-            }
-          }
-        }
-      }
-      if (!out.textContent && status.className !== 'err') {
-        status.className = 'err';
-        status.textContent = 'ストリームは届いたが本文が取れなかった(イベント形式を要確認)';
-      }
-    } catch (e) {
-      status.className = 'err';
-      status.textContent = String(e);
-    } finally {
-      send.disabled = false;
+/* ── 窓 ───────────────────────────────── */
+function winCells(cx, cy) {
+  const out = [];
+  for (let y = Math.floor(cy - WIN_R); y <= Math.ceil(cy + WIN_R); y++)
+    for (let x = Math.floor(cx - WIN_R); x <= Math.ceil(cx + WIN_R); x++) {
+      const dx = x + .5 - cx, dy = y + .5 - cy;
+      if (dx * dx + dy * dy <= WIN_R * WIN_R && inView(x, y)) out.push([x, y]);
     }
-  }
+  return out;
+}
+/* margin は「示す位置」を選ぶときだけ少し広げる。
+   ぎりぎり合法な点を光らせると、1px のずれで弾かれて理不尽になる。 */
+const tooClose = (cx, cy, margin = 1) =>
+  wins.some(w => (w[0] - cx) ** 2 + (w[1] - cy) ** 2 < (MIN_DIST * margin) ** 2);
 
-  send.addEventListener('click', ask);
-  q.addEventListener('keydown', (e) => { if (e.key === 'Enter') ask(); });
+function checkReveal(cells, cx, cy) {
+  if (tooClose(cx, cy))
+    return { ok: false, why: 'すでに開けた窓に近すぎる。重ねて開けることはできない。' };
+  if (!cells.some(([x, y]) => myInk(x, y) === 1 && !shown[idx(x, y)]))
+    return { ok: false, why: 'そこには自分の新しい画が無い。画の上を開けろ。' };
+  const sv = survivors(cells);
+  if (sv && kanjiOf(sv).length >= kCount)
+    return { ok: false, why: 'そこを開けても候補が1つも減らない。足踏みは禁じられている。' };
+  return { ok: true, sv };
+}
+
+/* 窓を (-ox,-oy) ずらしても全部が盤に収まるか */
+function shiftFits(ox, oy, extra) {
+  const all = extra ? wins.concat([extra]) : wins;
+  return all.every(w => inView(Math.floor(w[0] - ox - WIN_R), Math.floor(w[1] - oy - WIN_R))
+                     && inView(Math.ceil(w[0] - ox + WIN_R), Math.ceil(w[1] - oy + WIN_R)));
+}
+
+/* 逃げ手。必要なのは「いまの自分を否定すること」だけ。
+   名指しされた字そのものには(ずらしても)化けられない。 */
+/* 逃げる証明は「ここに私の画がある。名指しされた字はここに画を持たない」。
+   余白は証拠にならないので、画を見せることでしか否定できない。 */
+function escapeTargets(cells, cx, cy, margin = 1) {
+  if (cx !== undefined && tooClose(cx, cy, margin)) return [];
+  if (!accused.length || !pairs) return [];
+  const accPairs = pairs.filter(p => accused.includes(CHARS[p[0]]));
+  return pairs.filter(([k, ox, oy]) => {
+    if (target !== null && k !== target) return false;
+    if (accused.includes(CHARS[k])) return false;
+    if (k === meK && ox === 0 && oy === 0) return false;
+    if (!shiftFits(ox, oy, [cx, cy])) return false;
+    // 新しい自分の画が1つも写らない範囲は選べない
+    const fresh = cells.filter(([x, y]) => inkAt(k, ox, oy, x, y) === 1 && !shown[idx(x, y)]);
+    if (!fresh.length) return false;
+    // 名指しされた字(のあり得るずれ全部)を、見せた画で否定できること
+    return accPairs.every(([ak, aox, aoy]) =>
+      fresh.some(([x, y]) => inkAt(ak, aox, aoy, x, y) !== 1));
+  });
+}
+
+/* ── 描画 ─────────────────────────────── */
+function glyphRects(k) {
+  let out = '';
+  for (let i = 0; i < GCELLS; i++) {
+    if (!INK[k][i]) continue;
+    out += `<rect x="${(i % G) + GAP / 2}" y="${((i / G) | 0) + GAP / 2}" width="${1 - GAP}" height="${1 - GAP}"/>`;
+  }
+  return out;
+}
+/* 選んだ化け先を証明できる窓の位置。余裕のある点だけを返す。 */
+const HINT_MAX = 40;        // これより多いならほぼどこでも示せるので点は出さない
+function validSpots() {
+  if (target === null || mode !== 'escape') return [];
+  const step = Math.max(3, Math.round(WIN_R * 0.9));
+  const out = [];
+  for (let cy = V0 + WIN_R; cy <= V0 + VS - WIN_R; cy += step)
+    for (let cx = V0 + WIN_R; cx <= V0 + VS - WIN_R; cx += step)
+      if (escapeTargets(winCells(cx, cy), cx, cy, 1.12).length) out.push([cx, cy]);
+  return out;
+}
+
+function render() {
+  const all = CHARS.length ? glyphRects(meK) : '';
+  const clip = wins.map(w => `<circle cx="${w[0]}" cy="${w[1]}" r="${WIN_R}"/>`).join('');
+  const rings = wins.map((w, i) => `<circle cx="${w[0]}" cy="${w[1]}" r="${WIN_R}" fill="none"
+      stroke="${i === wins.length - 1 ? 'var(--accent)' : '#4a4433'}" stroke-width=".3" opacity=".8"/>`).join('');
+  const vs = validSpots();
+  const hints = (vs.length && vs.length <= HINT_MAX)
+    ? vs.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.6" fill="var(--accent)" opacity=".6"/>`).join('')
+    : '';
+  boardEl.innerHTML =
+    `<defs><clipPath id="cp">${clip || '<circle cx="-999" cy="-999" r="1"/>'}</clipPath></defs>
+     <g fill="var(--ink)" opacity=".24">${all}</g>
+     <g clip-path="url(#cp)" fill="var(--ink)">${all}</g>${rings}${hints}`;
+  boardEl.classList.toggle('clickable', mode === 'reveal' || mode === 'escape');
+  boardEl.classList.toggle('esc', mode === 'escape');
+
+  $('meCh').textContent = CHARS[meK] || '—';
+  $('score').textContent = total();
+  $('scoreSub').textContent = `${turns}手 / 化け${score}`;
+  const picking = mode === 'escape';
+  $('cands').classList.toggle('picking', picking);
+  const ks = pairs ? kanjiOf(pairs) : null;
+  $('candN').textContent = ks ? ks.length : '—';
+  $('candLab').textContent = picking ? '化け先を選べ' : 'まだ化けられる漢字';
+  const LIMIT = 150;
+  $('chips').innerHTML = ks
+    ? ks.slice(0, LIMIT).map(k => {
+        const cls = ['chip'];
+        const banned = accused.includes(CHARS[k]) || k === meK;
+        if (accused.includes(CHARS[k])) cls.push('accused');
+        else if (k === meK) cls.push('mine');
+        if (picking) cls.push(banned ? 'off' : (k === target ? 'target' : 'pick'));
+        return `<span class="${cls.join(' ')}" data-k="${k}">${CHARS[k]}</span>`;
+      }).join('') + (ks.length > LIMIT ? `<span class="chip off">…他${ks.length - LIMIT}</span>` : '')
+    : '<span style="color:#8b8a94;font-size:12px">まだ何も見せていない</span>';
+  $('path').innerHTML = path.length > 1
+    ? `化けた跡　${path.join(' <span style="color:#e8b545">→</span> ')}`
+    : `<span style="color:#8b8a94">化けた跡　まだ ${path[0] || '—'} のまま</span>`;
+}
+function say(html, kind) {
+  $('say').className = 'say' + (kind ? ' ' + kind : '');
+  $('say').innerHTML = html;
+}
+
+/* ── 入力 ─────────────────────────────── */
+boardEl.addEventListener('click', (ev) => {
+  if (mode !== 'reveal' && mode !== 'escape') return;
+  const r = boardEl.getBoundingClientRect();
+  const cx = V0 + (ev.clientX - r.left) / r.width * VS;
+  const cy = V0 + (ev.clientY - r.top) / r.height * VS;
+  const cells = winCells(cx, cy);
+  if (!cells.length) return;
+  if (mode === 'reveal') {
+    const v = checkReveal(cells, cx, cy);
+    if (!v.ok) return say(v.why, 'bad');
+    doReveal(cx, cy, cells, v.sv);
+  } else {
+    if (target === null) return say('先に<b>化け先</b>を選べ。下の一覧から選ぶ。', 'bad');
+    const ys = escapeTargets(cells, cx, cy);
+    if (!ys.length) return say(tooClose(cx, cy)
+      ? 'すでに開けた窓に近すぎる。'
+      : `そこでは <b>${CHARS[target]}</b> の画が写らないか、${CHARS[meK]} を否定できない。別の場所だ。`, 'bad');
+    doEscape(cx, cy, cells, ys);
+  }
+});
+
+$('chips').addEventListener('click', (ev) => {
+  if (mode !== 'escape') return;
+  const el = ev.target.closest('.chip.pick, .chip.target');
+  if (!el || !el.dataset.k) return;
+  const k = +el.dataset.k;
+  target = (target === k) ? null : k;
+  render();
+  if (target === null) return say(`<b>${accused[0]}</b> と読まれた。化け先を選べ。`, 'hit');
+  const spots = validSpots();
+  say(!spots.length
+    ? `<b>${CHARS[target]}</b> には化けられない。証明できる窓が残っていない。別の字を選べ。`
+    : spots.length <= HINT_MAX
+      ? `<b>${CHARS[target]}</b> に化ける。<br>盤の<b>光っている点</b>に窓を開けて、${CHARS[target]} の画を見せろ。`
+      : `<b>${CHARS[target]}</b> に化ける。<br>${CHARS[target]} の画が写る窓を開けろ。<b>ほぼどこでも示せる</b>。`,
+    spots.length ? 'hit' : 'bad');
+});
+
+/* 記録するのは画が写った升だけ */
+function mark(cells) {
+  cells.forEach(([x, y]) => { if (myInk(x, y) === 1) shown[idx(x, y)] = 1; });
+}
+
+function doReveal(cx, cy, cells, sv) {
+  turns++;
+  wins.push([cx, cy]); mark(cells);
+  pairs = sv || allPairs(cells);
+  kCount = kanjiOf(pairs).length; accused = []; target = null;
+  mode = 'wait'; render();
+  say('開けた。AIが読んでいる。');
+  askAI();
+}
+
+function doEscape(cx, cy, cells, ys) {
+  const best = ys.map(p => [p, pairs.filter(q => cells.every(([x, y]) =>
+      inkAt(p[0], p[1], p[2], x, y) !== 1 || inkAt(q[0], q[1], q[2], x, y) === 1)).length])
+    .sort((a, b) => b[1] - a[1])[0][0];
+  const [nk, ox, oy] = best;
+  const from = CHARS[meK];
+
+  // いったん今の座標系で確定させてから、新しい字を原点に取り直す
+  wins.push([cx, cy]); mark(cells);
+  pairs = pairs.filter(q => cells.every(([x, y]) =>
+      inkAt(nk, ox, oy, x, y) !== 1 || inkAt(q[0], q[1], q[2], x, y) === 1));
+
+  // 原点の付け替え: 字は動かさず、窓のほうを (-ox,-oy) 動かす
+  meK = nk;
+  wins = wins.map(w => [w[0] - ox, w[1] - oy]);
+  pairs = pairs.map(q => [q[0], q[1] - ox, q[2] - oy]);
+  const ns = new Uint8Array(VS * VS);
+  for (const w of wins) for (const [x, y] of winCells(w[0], w[1]))
+    if (myInk(x, y) === 1) ns[idx(x, y)] = 1;
+  shown = ns;
+  kCount = kanjiOf(pairs).length;
+
+  score++; path.push(CHARS[meK]); accused = []; target = null;
+  mode = 'wait'; render();
+  say(`この窓の中に <b>${from}</b> の画は無い。だから私は ${from} ではない。<br>` +
+      `<b>${from} → ${CHARS[meK]}</b> に化けた。` +
+      ((ox || oy) ? '<span style="color:#8b8a94">（窓の重なりがずれた）</span>' : ''), 'hit');
+  setTimeout(nextTurn, 1200);
+}
+
+function anyLegalReveal() {
+  const step = Math.max(2, Math.round(WIN_R * 0.7));
+  for (let cy = V0 + WIN_R; cy <= V0 + VS - WIN_R; cy += step)
+    for (let cx = V0 + WIN_R; cx <= V0 + VS - WIN_R; cx += step)
+      if (checkReveal(winCells(cx, cy), cx, cy).ok) return true;
+  return false;
+}
+
+function nextTurn() {
+  if (kCount !== null && kCount <= 1)
+    return gameOver('候補が1つしか残っていない。もう隠れられない。');
+  if (!anyLegalReveal()) return gameOver('もう開けられる窓が無い。<b>逃げ切りだ。</b>', true);
+  mode = 'reveal'; render();
+  say('次の窓を開けろ。');
+}
+
+function gameOver(msg, survived) {
+  mode = 'over'; accused = []; render();
+  const tale = path.length > 1 ? `<br>あなたは <b>${path.join(' → ')}</b> と渡り歩いた。` : '';
+  say(`${msg}<br><b>${total()} 点</b>　<span style="color:#8b8a94">${turns}手 逃げて ${score}回 化けた</span>${tale}`,
+      survived ? 'hit' : 'over');
+  $('again').classList.remove('hidden');
+}
+
+/* ── AI ───────────────────────────────── */
+/* 盤に対する絶対位置が分かると、それだけで字が絞れてしまう。
+   開いた範囲の外接矩形だけを切り出して渡し、どこを見ているかは伏せる。 */
+function relativeView(maxK = 22) {
+  // 見せた画の外接矩形だけ。窓の円は渡さない(窓を渡すと余白が漏れる)
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, any = false;
+  for (let y = V0; y < V0 + VS; y++) for (let x = V0; x < V0 + VS; x++) {
+    if (!shown[idx(x, y)]) continue;
+    any = true;
+    if (x < x0) x0 = x; if (x > x1) x1 = x;
+    if (y < y0) y0 = y; if (y > y1) y1 = y;
+  }
+  if (!any) return [];
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  const st = Math.max(1, Math.ceil(Math.max(w, h) / maxK));
+  const rows = [];
+  for (let gy = 0; gy * st < h; gy++) {
+    let row = '';
+    for (let gx = 0; gx * st < w; gx++) {
+      let ink = 0;
+      for (let y = y0 + gy * st; y < Math.min(y0 + (gy + 1) * st, y0 + h); y++)
+        for (let x = x0 + gx * st; x < Math.min(x0 + (gx + 1) * st, x0 + w); x++)
+          if (inView(x, y) && shown[idx(x, y)]) ink++;
+      row += ink ? '■' : '・';
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+const AI_LIST_MAX = 60;
+async function askAI() {
+  const el = $('ai');
+  el.classList.add('think');
+  $('aiFb').classList.add('hidden');
+  const ks = kanjiOf(pairs);
+  const want = 1;                 // 名指しは常に1字
+  let list = ks.map(k => CHARS[k]), partial = false;
+  if (list.length > AI_LIST_MAX) {
+    partial = true;
+    const others = list.filter(c => c !== CHARS[meK]).sort(() => Math.random() - .5);
+    list = [CHARS[meK], ...others.slice(0, AI_LIST_MAX - 1)].sort(() => Math.random() - .5);
+  }
+  let data;
+  try {
+    const r = await fetch('/api/guess', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ grid: relativeView(), candidates: list,
+        revealed: wins.length, count: want, partial, totalCandidates: ks.length }),
+    });
+    data = await r.json();
+    if (!Array.isArray(data.guesses)) throw new Error(data.error || '応答が不正');
+  } catch (e) {
+    data = { guesses: list.slice().sort(() => Math.random() - .5).slice(0, want),
+             reason: '勘で言う。', fallback: true, note: String(e) };
+  }
+  el.classList.remove('think');
+
+  accused = data.guesses.filter(g => list.includes(g));
+  $('aiGuess').textContent = accused.join('　') || '—';
+  $('aiReason').textContent = data.reason || '';
+  if (data.fallback) {
+    $('aiFb').textContent = 'オフライン判定（AIに繋がらなかった）';
+    $('aiFb').classList.remove('hidden');
+  }
+  render();
+
+  if (!accused.includes(CHARS[meK])) {
+    say('<b>外した。</b>お前はまだ私を見ていない。');
+    return setTimeout(nextTurn, 800);
+  }
+  target = null;
+  mode = 'escape'; render();
+  say(`<b>${accused[0]}</b> と読まれた。<br>下の一覧から<b>化け先を選べ</b>。` +
+      `<span style="color:#8b8a94">（名指しされた字には化けられない）</span>`, 'hit');
+}
+
+/* ── 開始 ─────────────────────────────── */
+function start() {
+  meK = Math.floor(Math.random() * CHARS.length);
+  pairs = null; kCount = null; shown = new Uint8Array(VS * VS); wins = [];
+  score = 0; turns = 0; path = [CHARS[meK]]; accused = []; target = null;
+  $('again').classList.add('hidden');
+  $('aiGuess').textContent = '—';
+  $('aiReason').textContent = 'まだ何も見ていない。';
+  $('aiFb').classList.add('hidden');
+  mode = 'reveal'; render();
+  say(`あなたは <b>${CHARS[meK]}</b>。薄く見えているのが自分の姿だ。<br>つついて窓を開け、画の一部を見せろ。`);
+}
+
+$('again').addEventListener('click', start);
+$('reroll').addEventListener('click', start);
+
+fetch('kanji64.json').then(r => r.json()).then(d => {
+  CHARS = d.chars;
+  const bin = atob(d.data), bp = d.bytesPer;
+  INK = [];
+  for (let k = 0; k < CHARS.length; k++) {
+    const a = new Uint8Array(GCELLS), off = k * bp;
+    for (let i = 0; i < GCELLS; i++) a[i] = (bin.charCodeAt(off + (i >> 3)) >> (7 - (i & 7))) & 1;
+    INK.push(a);
+  }
+  start();
+}).catch(e => say('kanji64.json を読めなかった: ' + e, 'over'));
 </script>
 </body>
 </html>
