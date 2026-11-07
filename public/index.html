@@ -9,7 +9,7 @@
     --bg: #f4efe6;
     --fg: #1a1a18;
     --muted: #6b6b66;
-    --line: #e4e4e0;
+    --line: #e0dacf;
     --card: #fffdf9;
     --accent: #d2691e;
   }
@@ -18,7 +18,7 @@
       --bg: #14120f;
       --fg: #eeeeec;
       --muted: #9a9a94;
-      --line: #2c2c32;
+      --line: #2e2a24;
       --card: #1d1a16;
       --accent: #f0914a;
     }
@@ -41,67 +41,64 @@
 
   main {
     width: 100%;
-    max-width: 560px;
+    max-width: 600px;
     background: var(--card);
     border: 1px solid var(--line);
     border-radius: 14px;
-    padding: 40px 32px;
+    padding: 36px 30px;
   }
 
   .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    font-size: 12px;
-    letter-spacing: .04em;
-    color: var(--muted);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 5px 12px;
-    margin-bottom: 22px;
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 12px; letter-spacing: .04em; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 5px 12px; margin-bottom: 20px;
   }
-  .dot {
-    width: 7px; height: 7px;
-    border-radius: 50%;
-    background: var(--accent);
-  }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
 
-  h1 {
-    margin: 0 0 10px;
-    font-size: clamp(24px, 5vw, 32px);
-    letter-spacing: -.02em;
-  }
+  h1 { margin: 0 0 8px; font-size: clamp(23px, 5vw, 30px); letter-spacing: -.02em; }
+  .lead { margin: 0 0 26px; color: var(--muted); font-size: 15px; }
 
-  p {
-    margin: 0 0 24px;
-    color: var(--muted);
-    font-size: 15px;
+  /* ── ここから下は動作確認用。中身を作るときに丸ごと差し替えてよい ── */
+  .probe {
+    border: 1px dashed var(--line); border-radius: 10px;
+    padding: 18px; background: color-mix(in srgb, var(--bg) 45%, transparent);
   }
+  .probe-label {
+    font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 12px;
+  }
+  .row { display: flex; gap: 8px; }
+  input[type=text] {
+    flex: 1; min-width: 0;
+    padding: 10px 12px; font: inherit; font-size: 14px;
+    color: var(--fg); background: var(--card);
+    border: 1px solid var(--line); border-radius: 8px;
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: 10px 18px; font: inherit; font-size: 14px; font-weight: 600;
+    color: #fff; background: var(--accent);
+    border: none; border-radius: 8px; cursor: pointer;
+    white-space: nowrap;
+  }
+  button:disabled { opacity: .45; cursor: default; }
 
-  #app {
-    border: 1px dashed var(--line);
-    border-radius: 10px;
-    padding: 28px 20px;
-    text-align: center;
-    color: var(--muted);
-    font-size: 13px;
+  #out {
+    margin-top: 14px; min-height: 2.6em;
+    font-size: 14px; white-space: pre-wrap; word-break: break-word;
   }
+  #out:empty::before { content: "応答がここに流れます"; color: var(--muted); }
+  #status { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  #status.err { color: #d14343; }
+  @media (prefers-color-scheme: dark) { #status.err { color: #ff8a8a; } }
 
   footer {
-    margin-top: 26px;
-    padding-top: 18px;
-    border-top: 1px solid var(--line);
-    font-size: 12px;
-    color: var(--muted);
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
+    margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line);
+    font-size: 12px; color: var(--muted);
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   }
-  code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: .92em;
-  }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .92em; }
 </style>
 </head>
 <body>
@@ -109,10 +106,16 @@
     <div class="badge"><span class="dot"></span>Cloudflare Workers</div>
 
     <h1>全日本AIハッカソン</h1>
-    <p>デプロイのための骨組み。ここから中身を作っていく。</p>
+    <p class="lead">デプロイのための骨組み。ここから中身を作っていく。</p>
 
-    <div id="app">
-      ここにアプリを実装する
+    <div class="probe">
+      <div class="probe-label">動作確認 · /api/chat</div>
+      <div class="row">
+        <input type="text" id="q" value="自己紹介を一文で。" autocomplete="off">
+        <button id="send">送信</button>
+      </div>
+      <div id="out"></div>
+      <div id="status"></div>
     </div>
 
     <footer>
@@ -121,5 +124,89 @@
     </footer>
   </main>
 
+<script>
+  document.getElementById('built').textContent =
+    new Date().toLocaleString('ja-JP', { dateStyle: 'medium', timeStyle: 'short' });
+
+  const q = document.getElementById('q');
+  const send = document.getElementById('send');
+  const out = document.getElementById('out');
+  const status = document.getElementById('status');
+
+  async function ask() {
+    const text = q.value.trim();
+    if (!text) return;
+
+    send.disabled = true;
+    out.textContent = '';
+    status.className = '';
+    status.textContent = '接続中…';
+    const t0 = performance.now();
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ input: text }),
+      });
+
+      // エラーは JSON で返る設計
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        status.className = 'err';
+        status.textContent = `${res.status} — ${err.error}${err.hint ? ' / ' + err.hint : ''}`;
+        if (err.detail) out.textContent = err.detail;
+        return;
+      }
+
+      // SSE を読む。data: 行の JSON を見て type で分岐する
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '', first = true;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const blocks = buf.split('\n\n');
+        buf = blocks.pop() ?? '';
+
+        for (const block of blocks) {
+          for (const line of block.split('\n')) {
+            if (!line.startsWith('data:')) continue;
+            const payload = line.slice(5).trim();
+            if (!payload || payload === '[DONE]') continue;
+
+            let ev;
+            try { ev = JSON.parse(payload); } catch { continue; }
+
+            if (ev.type === 'response.output_text.delta' && ev.delta) {
+              if (first) { status.textContent = `初回応答 ${Math.round(performance.now() - t0)}ms`; first = false; }
+              out.textContent += ev.delta;
+            } else if (ev.type === 'response.completed') {
+              status.textContent = `完了 ${Math.round(performance.now() - t0)}ms`;
+            } else if (ev.type === 'error' || ev.error) {
+              status.className = 'err';
+              status.textContent = ev.message || JSON.stringify(ev.error);
+            }
+          }
+        }
+      }
+      if (!out.textContent && status.className !== 'err') {
+        status.className = 'err';
+        status.textContent = 'ストリームは届いたが本文が取れなかった(イベント形式を要確認)';
+      }
+    } catch (e) {
+      status.className = 'err';
+      status.textContent = String(e);
+    } finally {
+      send.disabled = false;
+    }
+  }
+
+  send.addEventListener('click', ask);
+  q.addEventListener('keydown', (e) => { if (e.key === 'Enter') ask(); });
+</script>
 </body>
 </html>

@@ -1,8 +1,11 @@
 # このファイルをコピーして .dev.vars を作る:
 #   cp .dev.vars.example .dev.vars
-# .dev.vars は .gitignore 済み。コミットされない。
 #
-# 本番(Cloudflare)側へは wrangler で登録する:
+# ⚠️ 下の行は「= の右側すべて」を置き換えること。
+#    追記するとキーの先頭が sk-sk-... と二重になり 401 になる。
+#    値はクォートで囲まない。
+#
+# 本番(Cloudflare)側は別経路:
 #   npx wrangler secret put OPENAI_API_KEY
 
-OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+OPENAI_API_KEY=PASTE_YOUR_FULL_KEY_HERE
