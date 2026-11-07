@@ -120,12 +120,14 @@
   <summary>ルール</summary>
   <p>
   あなたは漢字1文字に化けている。手番ごとに盤を1か所つついて、<b>丸い窓を開けて自分の画を見せる</b>。
-  窓は必ず<b>自分の画を含み</b>、かつ<b>候補を1つ以上減らす</b>場所でなければならない（足踏み禁止）。<br><br>
+  窓は<b>自分の画にかかっていて</b>、<b>すでに開けた窓と重ならない</b>場所なら、どこでもいい。<br><br>
+  見せても候補が1つも減らなければ<b>何も渡していない</b>。それが上手い手だ。<br><br>
   AIは開いた窓から正体を読み、<b>1字を名指しする</b>。
   当てられたら<b>別の漢字に化けて逃げられる</b>——先に化け先を選び、
   <b>その字の画が写る窓</b>を開けて、いまの自分ではないことを示してからだ。
   名指しされた字そのものには化けられない。<br><br>
-  <b>1手逃げるごとに1点、1回化けるごとに10点。</b>逃げ道が尽きたら捕まる。
+  <b>1手逃げるごとに1点。そのうち何も渡さなかった手はさらに2点。1回化けるごとに10点。</b>
+  見せられる画が尽きるか、正体が1つに絞られたら終わり。
   </p>
 </details>
 
@@ -153,10 +155,11 @@ let choices = [];               // 最初の字を選ぶときの候補
 let pairs = null;               // [[k,ox,oy], ...] 自分から見た相対的なずれ
 let kCount = null;
 let shown = new Uint8Array(VS * VS), wins = [],
-    score = 0, turns = 0, path = [], mode = 'boot', accused = [], target = null;
+    score = 0, turns = 0, clean = 0, path = [], mode = 'boot', accused = [], target = null;
 
-const ESCAPE_BONUS = 10;
-const total = () => turns + score * ESCAPE_BONUS;
+const ESCAPE_BONUS = 10;   // 1回化ける
+const CLEAN_BONUS = 2;     // 候補を1つも減らさずに画を見せた手(1手ぶんに上乗せ)
+const total = () => turns + clean * CLEAN_BONUS + score * ESCAPE_BONUS;
 const boardEl = $('board');
 
 const idx = (x, y) => (y - V0) * VS + (x - V0);
@@ -222,13 +225,10 @@ function winCells(cx, cy) {
 const tooClose = (cx, cy, margin = 1) =>
   wins.some(w => (w[0] - cx) ** 2 + (w[1] - cy) ** 2 < (MIN_DIST * margin) ** 2);
 
-/* 合否だけ知りたいときの軽い版。候補を数え上げずに、
-   減るものが1つ見つかった時点で打ち切る。 */
+/* 合否だけ知りたいときの軽い版。候補の数え上げをしない。 */
 function canReveal(cells, cx, cy) {
   if (tooClose(cx, cy)) return false;
-  if (!cells.some(([x, y]) => myInk(x, y) === 1 && !shown[idx(x, y)])) return false;
-  if (!pairs) return true;
-  return pairs.some(p => !pairOk(p[0], p[1], p[2], cells));
+  return cells.some(([x, y]) => myInk(x, y) === 1 && !shown[idx(x, y)]);
 }
 
 function checkReveal(cells, cx, cy) {
@@ -236,10 +236,8 @@ function checkReveal(cells, cx, cy) {
     return { ok: false, why: 'すでに開けた窓に近すぎる。重ねて開けることはできない。' };
   if (!cells.some(([x, y]) => myInk(x, y) === 1 && !shown[idx(x, y)]))
     return { ok: false, why: 'そこには自分の新しい画が無い。画の上を開けろ。' };
-  const sv = survivors(cells);
-  if (sv && kanjiOf(sv).length >= kCount)
-    return { ok: false, why: 'そこを開けても候補が1つも減らない。足踏みは禁じられている。' };
-  return { ok: true, sv };
+  /* 候補が減らない手こそ上手い手なので、減らないことを理由に拒まない。 */
+  return { ok: true, sv: survivors(cells) };
 }
 
 /* 窓を (-ox,-oy) ずらしても全部が盤に収まるか */
@@ -339,7 +337,7 @@ function render() {
 
   $('meCh').textContent = choosing ? '—' : (CHARS[meK] || '—');
   $('score').textContent = total();
-  $('scoreSub').textContent = `${turns}手 / 化け${score}`;
+  $('scoreSub').textContent = `${turns}手 / 無傷${clean} / 化け${score}`;
   const picking = mode === 'escape';
   $('cands').classList.toggle('picking', picking || choosing);
   if (choosing) {
@@ -421,11 +419,17 @@ function mark(cells) {
 
 function doReveal(cx, cy, cells, sv) {
   turns++;
+  const before = kCount;
   wins.push([cx, cy]); mark(cells);
   pairs = sv || allPairs(cells);
   kCount = kanjiOf(pairs).length; accused = []; target = null;
+  const lost = before === null ? null : before - kCount;
+  const spotless = lost === 0;
+  if (spotless) clean++;
   mode = 'wait'; render();
-  say('開けた。AIが読んでいる。');
+  say(spotless
+    ? '<b>何も渡さなかった。</b>画を見せて、候補は1つも減っていない。'
+    : (lost === null ? '開けた。AIが読んでいる。' : `開けた。候補が <b>${lost}</b> 減った。`));
   askAI();
 }
 
@@ -478,7 +482,7 @@ function nextTurn() {
 function gameOver(msg, survived) {
   mode = 'over'; accused = []; render();
   const tale = path.length > 1 ? `<br>あなたは <b>${path.join(' → ')}</b> と渡り歩いた。` : '';
-  say(`${msg}<br><b>${total()} 点</b>　<span style="color:#8b8a94">${turns}手 逃げて ${score}回 化けた</span>${tale}`,
+  say(`${msg}<br><b>${total()} 点</b>　<span style="color:#8b8a94">${turns}手 逃げて、うち ${clean}手は何も渡さず、${score}回 化けた</span>${tale}`,
       survived ? 'hit' : 'over');
   $('again').classList.remove('hidden');
 }
@@ -595,7 +599,7 @@ function startChoosing() {
     .sort(() => Math.random() - .5).slice(0, CHOICES - (theme >= 0 ? 1 : 0));
   choices = (theme >= 0 ? [theme, ...rest] : rest).sort(() => Math.random() - .5);
   pairs = null; kCount = null; shown = new Uint8Array(VS * VS); wins = [];
-  score = 0; turns = 0; path = []; accused = []; target = null;
+  score = 0; turns = 0; clean = 0; path = []; accused = []; target = null;
   $('again').classList.add('hidden');
   $('aiGuess').textContent = '—';
   $('aiReason').textContent = 'まだ何も見ていない。';
@@ -607,7 +611,7 @@ function startChoosing() {
 function start(k) {
   meK = (typeof k === 'number' && k >= 0) ? k : Math.floor(Math.random() * CHARS.length);
   pairs = null; kCount = null; shown = new Uint8Array(VS * VS); wins = [];
-  score = 0; turns = 0; path = [CHARS[meK]]; accused = []; target = null;
+  score = 0; turns = 0; clean = 0; path = [CHARS[meK]]; accused = []; target = null;
   $('again').classList.add('hidden');
   $('aiGuess').textContent = '—';
   $('aiReason').textContent = 'まだ何も見ていない。';
