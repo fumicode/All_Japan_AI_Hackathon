@@ -73,6 +73,14 @@
              background:var(--accent);color:#1a1205;font-weight:700;cursor:pointer;letter-spacing:.06em}
   button.act.ghost{background:transparent;color:var(--dim);border:1px solid var(--line);font-weight:500}
   .row{display:flex;gap:9px;flex-wrap:wrap;justify-content:center}
+  /* もう一つの作品への導線。ゲームの操作ボタンと見分けがつくようにする */
+  .other{display:inline-flex;align-items:center;gap:9px;margin-top:4px;
+         padding:10px 18px;border-radius:999px;text-decoration:none;
+         border:1px solid var(--line);background:#121218;color:var(--dim);
+         font-size:13px;transition:border-color .15s,color .15s}
+  .other:hover{border-color:var(--accent);color:var(--text)}
+  .other .ttl{font-size:19px;font-weight:700;color:var(--ink);line-height:1}
+  .other .arw{font-size:12px;opacity:.7}
   .rules{max-width:620px;font-size:12px;color:var(--dim);line-height:1.8}
   .rules summary{cursor:pointer;letter-spacing:.1em}
   .hidden{display:none!important}
@@ -115,6 +123,10 @@
   <button class="act ghost" id="choose">字を選んで始める</button>
   <button class="act ghost" id="reroll">くじ引きで始める</button>
 </div>
+
+<a class="other" href="https://henge-bubly.vercel.app/" target="_blank" rel="noopener">
+  もう一つの作品<span class="ttl">化</span><span class="arw">↗</span>
+</a>
 
 <details class="rules">
   <summary>ルール</summary>
