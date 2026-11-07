@@ -138,8 +138,8 @@
   当てられたら<b>別の漢字に化けて逃げられる</b>——先に化け先を選び、
   <b>その字の画が写る窓</b>を開けて、いまの自分ではないことを示してからだ。
   名指しされた字そのものには化けられない。<br><br>
-  <b>1手逃げるごとに1点。そのうち何も渡さなかった手はさらに2点。1回化けるごとに10点。</b>
-  見せられる画が尽きるか、正体が1つに絞られたら終わり。
+  <b>15手 逃げ切れば勝ち。</b>正体が1つに絞られたら負け。<br>
+  1手逃げるごとに1点。そのうち何も渡さなかった手はさらに2点。1回化けるごとに10点。
   </p>
 </details>
 
@@ -161,7 +161,8 @@ let CHARS = [], INK = [], INKD = [];
    「見せた升と候補の升がぴったり一致」を求めると、画の太さや位置の
    1/64 のずれで候補が死に、2窓で1字まで落ちてしまう。
    欲しいのは「その辺りに画が通っているか」なので D 升ぶん膨らませる。 */
-const DILATE = 2;
+const DILATE = 0;   // 0 = 升がそのまま一致すること。実測で13〜16手で候補1になり、
+                    //     15手の上限と拮抗する。上げるとAIが追いつけなくなる。
 let meK = 0;                    // 自分は常にずれ 0。描画位置は動かない
 let choices = [];               // 最初の字を選ぶときの候補
 let pairs = null;               // [[k,ox,oy], ...] 自分から見た相対的なずれ
@@ -169,6 +170,7 @@ let kCount = null;
 let shown = new Uint8Array(VS * VS), wins = [],
     score = 0, turns = 0, clean = 0, path = [], mode = 'boot', accused = [], target = null;
 
+const MAX_TURNS = 15;      // ここまで逃げ切れば勝ち
 const ESCAPE_BONUS = 10;   // 1回化ける
 const CLEAN_BONUS = 2;     // 候補を1つも減らさずに画を見せた手(1手ぶんに上乗せ)
 const total = () => turns + clean * CLEAN_BONUS + score * ESCAPE_BONUS;
@@ -349,7 +351,7 @@ function render() {
 
   $('meCh').textContent = choosing ? '—' : (CHARS[meK] || '—');
   $('score').textContent = total();
-  $('scoreSub').textContent = `${turns}手 / 無傷${clean} / 化け${score}`;
+  $('scoreSub').textContent = `${turns}/${MAX_TURNS}手 / 無傷${clean} / 化け${score}`;
   const picking = mode === 'escape';
   $('cands').classList.toggle('picking', picking || choosing);
   if (choosing) {
@@ -484,17 +486,20 @@ function anyLegalReveal() {
 }
 
 function nextTurn() {
+  if (turns >= MAX_TURNS)
+    return gameOver(`<b>${MAX_TURNS}手、逃げ切った。お前の勝ちだ。</b>`, true);
   if (kCount !== null && kCount <= 1)
     return gameOver('候補が1つしか残っていない。もう隠れられない。');
   if (!anyLegalReveal()) return gameOver('もう開けられる窓が無い。<b>逃げ切りだ。</b>', true);
   mode = 'reveal'; render();
-  say('次の窓を開けろ。');
+  say(`次の窓を開けろ。<span style="color:#8b8a94">あと ${MAX_TURNS - turns} 手で逃げ切り</span>`);
 }
 
 function gameOver(msg, survived) {
   mode = 'over'; accused = []; render();
   const tale = path.length > 1 ? `<br>あなたは <b>${path.join(' → ')}</b> と渡り歩いた。` : '';
-  say(`${msg}<br><b>${total()} 点</b>　<span style="color:#8b8a94">${turns}手 逃げて、うち ${clean}手は何も渡さず、${score}回 化けた</span>${tale}`,
+  say(`${survived ? '勝ち' : '負け'}　${msg}<br><b>${total()} 点</b>　` +
+      `<span style="color:#8b8a94">${turns}手 逃げて、うち ${clean}手は何も渡さず、${score}回 化けた</span>${tale}`,
       survived ? 'hit' : 'over');
   $('again').classList.remove('hidden');
 }
@@ -629,7 +634,8 @@ function start(k) {
   $('aiReason').textContent = 'まだ何も見ていない。';
   $('aiFb').classList.add('hidden');
   mode = 'reveal'; render();
-  say(`あなたは <b>${CHARS[meK]}</b>。薄く見えているのが自分の姿だ。<br>つついて窓を開け、画の一部を見せろ。`);
+  say(`あなたは <b>${CHARS[meK]}</b>。薄く見えているのが自分の姿だ。<br>` +
+      `つついて窓を開け、画の一部を見せろ。<span style="color:#8b8a94">${MAX_TURNS}手 逃げ切れば勝ち</span>`);
 }
 
 $('again').addEventListener('click', () => start());
