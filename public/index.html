@@ -511,8 +511,9 @@ async function askAI() {
   let list = ks.map(k => CHARS[k]), partial = false;
   if (list.length > AI_LIST_MAX) {
     partial = true;
-    const others = list.filter(c => c !== CHARS[meK]).sort(() => Math.random() - .5);
-    list = [CHARS[meK], ...others.slice(0, AI_LIST_MAX - 1)].sort(() => Math.random() - .5);
+    // 公平に抜く。自分を必ず混ぜると AI の探索範囲が候補全体から
+    // この抜粋の大きさまで縮み、的中率が一桁上がってしまう。
+    list = list.slice().sort(() => Math.random() - .5).slice(0, AI_LIST_MAX);
   }
   let data;
   try {
