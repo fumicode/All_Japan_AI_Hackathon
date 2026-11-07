@@ -474,7 +474,7 @@ function gameOver(msg, survived) {
 /* ── AI ───────────────────────────────── */
 /* 盤に対する絶対位置が分かると、それだけで字が絞れてしまう。
    開いた範囲の外接矩形だけを切り出して渡し、どこを見ているかは伏せる。 */
-function relativeView(maxK = 22) {
+function relativeView(K = 20) {
   // 見せた画の外接矩形だけ。窓の円は渡さない(窓を渡すと余白が漏れる)
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, any = false;
   for (let y = V0; y < V0 + VS; y++) for (let x = V0; x < V0 + VS; x++) {
@@ -485,20 +485,25 @@ function relativeView(maxK = 22) {
   }
   if (!any) return [];
   const w = x1 - x0 + 1, h = y1 - y0 + 1;
-  const st = Math.max(1, Math.ceil(Math.max(w, h) / maxK));
-  const rows = [];
-  for (let gy = 0; gy * st < h; gy++) {
+  /* 最長辺を必ず K マスに正規化する。
+     実寸のまま渡すと、断片が密集していれば細かく、離れていれば粗い図になり、
+     その粒度の差から字に対する倍率が読めてしまう。 */
+  const s = Math.max(w, h) / K;
+  const cols = Math.max(1, Math.round(w / s)), rows = Math.max(1, Math.round(h / s));
+  const out = [];
+  for (let gy = 0; gy < rows; gy++) {
     let row = '';
-    for (let gx = 0; gx * st < w; gx++) {
+    const ya = y0 + Math.floor(gy * s), yb = Math.max(y0 + Math.floor((gy + 1) * s), ya + 1);
+    for (let gx = 0; gx < cols; gx++) {
+      const xa = x0 + Math.floor(gx * s), xb = Math.max(x0 + Math.floor((gx + 1) * s), xa + 1);
       let ink = 0;
-      for (let y = y0 + gy * st; y < Math.min(y0 + (gy + 1) * st, y0 + h); y++)
-        for (let x = x0 + gx * st; x < Math.min(x0 + (gx + 1) * st, x0 + w); x++)
-          if (inView(x, y) && shown[idx(x, y)]) ink++;
+      for (let y = ya; y < yb; y++) for (let x = xa; x < xb; x++)
+        if (inView(x, y) && shown[idx(x, y)]) ink++;
       row += ink ? '■' : '・';
     }
-    rows.push(row);
+    out.push(row);
   }
-  return rows;
+  return out;
 }
 
 const AI_LIST_MAX = 60;
