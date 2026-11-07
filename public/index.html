@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>化かし合い</title>
+<title>漢字の化かしAI</title>
 <style>
   :root{
     --bg:#0d0d11; --panel:#15151b; --board:#07070a; --ink:#f4f1ea;
@@ -16,7 +16,7 @@
        padding:12px 14px 30px;gap:10px;-webkit-text-size-adjust:100%}
 
   header{width:100%;max-width:980px;display:flex;align-items:baseline;gap:14px}
-  h1{margin:0;font-size:19px;letter-spacing:.22em;font-weight:600}
+  h1{margin:0;font-size:18px;letter-spacing:.16em;font-weight:600;white-space:nowrap}
   h1 em{font-style:normal;color:var(--accent)}
   .meNow{display:flex;align-items:baseline;gap:8px;margin-left:auto}
   .meNow .lab{font-size:10px;color:var(--dim);letter-spacing:.14em}
@@ -81,7 +81,7 @@
 <body>
 
 <header>
-  <h1>化<em>かし合い</em></h1>
+  <h1>漢字の<em>化かしAI</em></h1>
   <div class="meNow"><span class="lab">いまのあなた</span><span class="ch" id="meCh">—</span></div>
   <div class="score"><b id="score">0</b> 点<br><span id="scoreSub">0手 / 化け0</span></div>
 </header>
@@ -134,14 +134,19 @@
    化けた先が「ずれて一致する字」のときは、動くのは窓のほうになる。
    断片どうしの相対位置は変わらないので、AI から見える情報は同じ。 */
 const G = 64, GCELLS = G * G;   // 字そのものの分割数
-const OFF = 10;                 // 化け先が許されるずれ幅(升)
+const OFF = 10, OFF_STEP = 2;   // 化け先が許されるずれ幅(升)と刻み
 const V0 = -24, VS = 112;       // 盤(描画と記録)の範囲: V0 .. V0+VS
 const WIN_R = 0.065 * G;        // 窓の半径。直径が字の13% / 52升
 const MIN_DIST = 1.5 * WIN_R;   // 窓どうしの最低距離。重ねて足踏みするのを防ぐ
 const GAP = 0.08;
 const $ = (id) => document.getElementById(id);
 
-let CHARS = [], INK = [];
+let CHARS = [], INK = [], INKD = [];
+/* 判定に使うのは太らせた画。
+   「見せた升と候補の升がぴったり一致」を求めると、画の太さや位置の
+   1/64 のずれで候補が死に、2窓で1字まで落ちてしまう。
+   欲しいのは「その辺りに画が通っているか」なので D 升ぶん膨らませる。 */
+const DILATE = 2;
 let meK = 0;                    // 自分は常にずれ 0。描画位置は動かない
 let pairs = null;               // [[k,ox,oy], ...] 自分から見た相対的なずれ
 let kCount = null;
@@ -159,13 +164,33 @@ function inkAt(k, ox, oy, x, y) {
   if (gx < 0 || gy < 0 || gx >= G || gy >= G) return 0;
   return INK[k][gy * G + gx];
 }
+/* 太らせたほう。候補の判定と、否定の証明にはこちらを使う */
+function inkNear(k, ox, oy, x, y) {
+  const gx = x - ox, gy = y - oy;
+  if (gx < 0 || gy < 0 || gx >= G || gy >= G) return 0;
+  return INKD[k][gy * G + gx];
+}
+function dilate(src, d) {
+  const tmp = new Uint8Array(G * G), out = new Uint8Array(G * G);
+  for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+    let v = 0;
+    for (let i = -d; i <= d && !v; i++) { const nx = x + i; if (nx >= 0 && nx < G && src[y * G + nx]) v = 1; }
+    tmp[y * G + x] = v;
+  }
+  for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+    let v = 0;
+    for (let i = -d; i <= d && !v; i++) { const ny = y + i; if (ny >= 0 && ny < G && tmp[ny * G + x]) v = 1; }
+    out[y * G + x] = v;
+  }
+  return out;
+}
 const myInk = (x, y) => inkAt(meK, 0, 0, x, y);
 /* 見せたのは画だけ。窓の中の黒い部分は「画が無い」ではなく「まだ見せていない」。
    なので候補の条件は「見せた画の位置すべてに画があること」だけ。
    余白を証拠に使わない分、候補は大きく残る。 */
 function pairOk(k, ox, oy, cells) {
   for (const [x, y] of cells)
-    if (myInk(x, y) === 1 && inkAt(k, ox, oy, x, y) !== 1) return false;
+    if (myInk(x, y) === 1 && inkNear(k, ox, oy, x, y) !== 1) return false;
   return true;
 }
 const kanjiOf = (ps) => [...new Set(ps.map(p => p[0]))];
@@ -173,8 +198,8 @@ const kanjiOf = (ps) => [...new Set(ps.map(p => p[0]))];
 function allPairs(cells) {
   const out = [];
   for (let k = 0; k < CHARS.length; k++)
-    for (let oy = -OFF; oy <= OFF; oy++)
-      for (let ox = -OFF; ox <= OFF; ox++)
+    for (let oy = -OFF; oy <= OFF; oy += OFF_STEP)
+      for (let ox = -OFF; ox <= OFF; ox += OFF_STEP)
         if (pairOk(k, ox, oy, cells)) out.push([k, ox, oy]);
   return out;
 }
@@ -194,6 +219,15 @@ function winCells(cx, cy) {
    ぎりぎり合法な点を光らせると、1px のずれで弾かれて理不尽になる。 */
 const tooClose = (cx, cy, margin = 1) =>
   wins.some(w => (w[0] - cx) ** 2 + (w[1] - cy) ** 2 < (MIN_DIST * margin) ** 2);
+
+/* 合否だけ知りたいときの軽い版。候補を数え上げずに、
+   減るものが1つ見つかった時点で打ち切る。 */
+function canReveal(cells, cx, cy) {
+  if (tooClose(cx, cy)) return false;
+  if (!cells.some(([x, y]) => myInk(x, y) === 1 && !shown[idx(x, y)])) return false;
+  if (!pairs) return true;
+  return pairs.some(p => !pairOk(p[0], p[1], p[2], cells));
+}
 
 function checkReveal(cells, cx, cy) {
   if (tooClose(cx, cy))
@@ -217,6 +251,22 @@ function shiftFits(ox, oy, extra) {
    名指しされた字そのものには(ずらしても)化けられない。 */
 /* 逃げる証明は「ここに私の画がある。名指しされた字はここに画を持たない」。
    余白は証拠にならないので、画を見せることでしか否定できない。 */
+function escapeOk(cells, cx, cy, margin = 1) {   // 存在するかだけ
+  if (cx !== undefined && tooClose(cx, cy, margin)) return false;
+  if (!accused.length || !pairs) return false;
+  const accPairs = pairs.filter(p => accused.includes(CHARS[p[0]]));
+  return pairs.some(p => escOk(p, cells, accPairs, cx, cy));
+}
+function escOk([k, ox, oy], cells, accPairs, cx, cy) {
+  if (target !== null && k !== target) return false;
+  if (accused.includes(CHARS[k])) return false;
+  if (k === meK && ox === 0 && oy === 0) return false;
+  if (!shiftFits(ox, oy, [cx, cy])) return false;
+  const fresh = cells.filter(([x, y]) => inkAt(k, ox, oy, x, y) === 1 && !shown[idx(x, y)]);
+  if (!fresh.length) return false;
+  return accPairs.every(([ak, aox, aoy]) =>
+    fresh.some(([x, y]) => inkNear(ak, aox, aoy, x, y) !== 1));
+}
 function escapeTargets(cells, cx, cy, margin = 1) {
   if (cx !== undefined && tooClose(cx, cy, margin)) return [];
   if (!accused.length || !pairs) return [];
@@ -231,7 +281,7 @@ function escapeTargets(cells, cx, cy, margin = 1) {
     if (!fresh.length) return false;
     // 名指しされた字(のあり得るずれ全部)を、見せた画で否定できること
     return accPairs.every(([ak, aox, aoy]) =>
-      fresh.some(([x, y]) => inkAt(ak, aox, aoy, x, y) !== 1));
+      fresh.some(([x, y]) => inkNear(ak, aox, aoy, x, y) !== 1));
   });
 }
 
@@ -244,6 +294,18 @@ function glyphRects(k) {
   }
   return out;
 }
+/* 逃げ道が1つでもあるか。無ければ逃げモードに入れてはいけない。 */
+function anyEscape() {
+  const save = target; target = null;
+  try {
+    const step = Math.max(3, Math.round(WIN_R * 0.9));
+    for (let cy = V0 + WIN_R; cy <= V0 + VS - WIN_R; cy += step)
+      for (let cx = V0 + WIN_R; cx <= V0 + VS - WIN_R; cx += step)
+        if (escapeOk(winCells(cx, cy), cx, cy)) return true;
+    return false;
+  } finally { target = save; }
+}
+
 /* 選んだ化け先を証明できる窓の位置。余裕のある点だけを返す。 */
 const HINT_MAX = 40;        // これより多いならほぼどこでも示せるので点は出さない
 function validSpots() {
@@ -252,7 +314,7 @@ function validSpots() {
   const out = [];
   for (let cy = V0 + WIN_R; cy <= V0 + VS - WIN_R; cy += step)
     for (let cx = V0 + WIN_R; cx <= V0 + VS - WIN_R; cx += step)
-      if (escapeTargets(winCells(cx, cy), cx, cy, 1.12).length) out.push([cx, cy]);
+      if (escapeOk(winCells(cx, cy), cx, cy, 1.12)) out.push([cx, cy]);
   return out;
 }
 
@@ -278,7 +340,8 @@ function render() {
   const picking = mode === 'escape';
   $('cands').classList.toggle('picking', picking);
   const ks = pairs ? kanjiOf(pairs) : null;
-  $('candN').textContent = ks ? ks.length : '—';
+  const pickable = ks ? ks.filter(k => k !== meK && !accused.includes(CHARS[k])).length : 0;
+  $('candN').textContent = ks ? (picking ? pickable : ks.length) : '—';
   $('candLab').textContent = picking ? '化け先を選べ' : 'まだ化けられる漢字';
   const LIMIT = 150;
   $('chips').innerHTML = ks
@@ -356,7 +419,7 @@ function doReveal(cx, cy, cells, sv) {
 
 function doEscape(cx, cy, cells, ys) {
   const best = ys.map(p => [p, pairs.filter(q => cells.every(([x, y]) =>
-      inkAt(p[0], p[1], p[2], x, y) !== 1 || inkAt(q[0], q[1], q[2], x, y) === 1)).length])
+      inkAt(p[0], p[1], p[2], x, y) !== 1 || inkNear(q[0], q[1], q[2], x, y) === 1)).length])
     .sort((a, b) => b[1] - a[1])[0][0];
   const [nk, ox, oy] = best;
   const from = CHARS[meK];
@@ -364,7 +427,7 @@ function doEscape(cx, cy, cells, ys) {
   // いったん今の座標系で確定させてから、新しい字を原点に取り直す
   wins.push([cx, cy]); mark(cells);
   pairs = pairs.filter(q => cells.every(([x, y]) =>
-      inkAt(nk, ox, oy, x, y) !== 1 || inkAt(q[0], q[1], q[2], x, y) === 1));
+      inkAt(nk, ox, oy, x, y) !== 1 || inkNear(q[0], q[1], q[2], x, y) === 1));
 
   // 原点の付け替え: 字は動かさず、窓のほうを (-ox,-oy) 動かす
   meK = nk;
@@ -385,10 +448,10 @@ function doEscape(cx, cy, cells, ys) {
 }
 
 function anyLegalReveal() {
-  const step = Math.max(2, Math.round(WIN_R * 0.7));
+  const step = Math.max(3, Math.round(WIN_R));
   for (let cy = V0 + WIN_R; cy <= V0 + VS - WIN_R; cy += step)
     for (let cx = V0 + WIN_R; cx <= V0 + VS - WIN_R; cx += step)
-      if (checkReveal(winCells(cx, cy), cx, cy).ok) return true;
+      if (canReveal(winCells(cx, cy), cx, cy)) return true;
   return false;
 }
 
@@ -480,6 +543,8 @@ async function askAI() {
     return setTimeout(nextTurn, 800);
   }
   target = null;
+  if (!anyEscape())
+    return gameOver(`<b>${CHARS[meK]}</b> ——見破られた。もう化ける先が無い。`);
   mode = 'escape'; render();
   say(`<b>${accused[0]}</b> と読まれた。<br>下の一覧から<b>化け先を選べ</b>。` +
       `<span style="color:#8b8a94">（名指しされた字には化けられない）</span>`, 'hit');
@@ -509,6 +574,7 @@ fetch('kanji64.json').then(r => r.json()).then(d => {
     const a = new Uint8Array(GCELLS), off = k * bp;
     for (let i = 0; i < GCELLS; i++) a[i] = (bin.charCodeAt(off + (i >> 3)) >> (7 - (i & 7))) & 1;
     INK.push(a);
+    INKD.push(dilate(a, DILATE));
   }
   start();
 }).catch(e => say('kanji64.json を読めなかった: ' + e, 'over'));
